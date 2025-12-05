@@ -64,10 +64,21 @@ fn scan_database(db_path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     // Try to open known tables
     let tables = vec![
+        // Legacy Erigon tables
         "PlainState", "AccountHistory", "StorageHistory",
         "AccountChangeSet", "StorageChangeSet",
-        "Headers", "BlockBody", "Transactions",
-        "Code", "IncarnationMap",
+        
+        // Erigon v3 Domain tables  
+        "AccountKeys", "AccountVals", "AccountHistoryKeys", "AccountHistoryVals", "AccountIdx",
+        "StorageKeys", "StorageVals", "StorageHistoryKeys", "StorageHistoryVals", "StorageIdx",
+        "CodeKeys", "CodeVals", "CodeHistoryKeys", "CodeHistoryVals", "CodeIdx",
+        "CommitmentKeys", "CommitmentVals", "CommitmentHistoryKeys", "CommitmentHistoryVals", "CommitmentIdx",
+        
+        // Block data
+        "Headers", "HeaderNumber", "BlockBody", "Transactions", "Receipts",
+        
+        // Other
+        "Code", "IncarnationMap", "ContractCode",
     ];
 
     println!("\n  Named tables:");

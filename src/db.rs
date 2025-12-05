@@ -7,6 +7,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// Database table names used by Erigon
+///
+/// PlainState table uses MDBX DupSort feature to store both accounts and storage:
+/// - 20-byte keys: Account data (address -> RLP-encoded account)
+/// - 28-byte keys: Storage data (address + incarnation -> storage_key + value)
+///
+/// Physical layout from BSC-Erigon (db/kv/tables.go#L860-L891):
+/// ```text
+/// key              | value
+/// -----------------|------------------
+/// [address]        | [account_rlp]
+/// [addr]+[inc]     | [storage1_key]+[storage1_value]
+///                  | [storage2_key]+[storage2_value]  // DupSort: multiple values
+/// ```
+///
+/// Reference: https://github.com/node-real/bsc-erigon/blob/bd770e2fea092855f5d5b2557c93ae37045716d3/db/kv/tables.go#L860-L891
 pub const TABLE_PLAIN_STATE: &str = "PlainState";
 pub const TABLE_PLAIN_CONTRACT_CODE: &str = "PlainContractCode";
 pub const TABLE_PLAIN_STATE_STORAGE: &str = "PlainState"; // Uses DupSort for storage

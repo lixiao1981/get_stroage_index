@@ -211,9 +211,16 @@ impl<'a> AccountIterator<'a> {
                             continue;
                         }
                         
+                        // PlainState uses DupSort: 20-byte keys are accounts, 28-byte keys are storage
+                        // We only want accounts, so skip storage keys
+                        if key.len() == 28 {
+                            // This is a storage key (address + incarnation), skip it
+                            continue;
+                        }
+                        
                         // Key should be 20 bytes (address)
                         if key.len() != 20 {
-                            warn!("Invalid key length: {} bytes, expected 20", key.len());
+                            warn!("Unexpected key length: {} bytes (expected 20 for account or 28 for storage)", key.len());
                             continue;
                         }
                         
@@ -243,12 +250,23 @@ impl<'a> AccountIterator<'a> {
         };
         
         // Collect batch from beginning
-        for result in iter.take(self.batch_size) {
+        for result in iter {
+            if results.len() >= self.batch_size {
+                break;
+            }
+            
             match result {
                 Ok((key, value)) => {
+                    // PlainState uses DupSort: 20-byte keys are accounts, 28-byte keys are storage
+                    // We only want accounts, so skip storage keys
+                    if key.len() == 28 {
+                        // This is a storage key (address + incarnation), skip it
+                        continue;
+                    }
+                    
                     // Key should be 20 bytes (address)
                     if key.len() != 20 {
-                        warn!("Invalid key length: {} bytes, expected 20", key.len());
+                        warn!("Unexpected key length: {} bytes (expected 20 for account or 28 for storage)", key.len());
                         continue;
                     }
                     

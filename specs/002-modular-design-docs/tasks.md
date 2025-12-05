@@ -29,16 +29,16 @@ Incremental Delivery: Expand documentation in phases, focusing on clarity and pr
 
 ### Phase 1: Setup
 
-- [ ] T001 Create documentation project structure in specs/002-modular-design-docs/
-- [ ] T002 Initialize RUST_MODULAR_DESIGN.md with basic template
-- [ ] T003 Set up version control tracking for documentation
+- [X] T001 Create documentation project structure in specs/002-modular-design-docs/
+- [X] T002 Initialize RUST_MODULAR_DESIGN.md with basic template
+- [X] T003 Set up version control tracking for documentation
 
 ### Phase 2: Foundational
 
-- [ ] T004 Extract existing modular design patterns from current codebase
-- [ ] T005 Define consistent terminology for architectural concepts
-- [ ] T006 Create initial layer definition guidelines
-- [ ] T034 [Constitution] Map Chinese constitution principles to English documentation sections with explicit cross-references
+- [X] T004 Extract existing modular design patterns from current codebase
+- [X] T005 Define consistent terminology for architectural concepts
+- [X] T006 Create initial layer definition guidelines
+- [X] T034 [Constitution] Map Chinese constitution principles to English documentation sections with explicit cross-references
 
 ### Phase 3: User Story 1 - New Developer Onboarding [US1]
 
@@ -71,13 +71,13 @@ Incremental Delivery: Expand documentation in phases, focusing on clarity and pr
 
 ### Phase 6.5: Missing Functional Requirements Coverage
 
-- [ ] T028 [FR-007] Create module templates with mod.rs structure and visibility patterns (2 complete examples)
-- [ ] T029 [FR-008] Document dependency injection strategies for Rust ownership model (3 working code examples)
-- [ ] T030 [FR-010] Add integration test examples for modular code testability (2 complete test examples)
-- [ ] T031 [FR-011] Document zero-cost abstraction trade-offs with decision criteria (3 scenarios)
-- [ ] T032 [FR-012] Add performance considerations for trait dispatch with benchmarks (2 comparison examples)
-- [ ] T033 [FR-006] Complete refactoring patterns for 5th violation (visibility leaks)
-- [ ] T035 [Constitution] Include test-first workflow examples demonstrating red-green-refactor cycle for modular Rust code
+- [X] T028 [FR-007] Create module templates with mod.rs structure and visibility patterns (2 complete examples)
+- [X] T029 [FR-008] Document dependency injection strategies for Rust ownership model (3 working code examples)
+- [X] T030 [FR-010] Add integration test examples for modular code testability (2 complete test examples)
+- [X] T031 [FR-011] Document zero-cost abstraction trade-offs with decision criteria (3 scenarios)
+- [X] T032 [FR-012] Add performance considerations for trait dispatch with benchmarks (2 comparison examples)
+- [X] T033 [FR-006] Complete refactoring patterns for 5th violation (visibility leaks)
+- [X] T035 [Constitution] Include test-first workflow examples demonstrating red-green-refactor cycle for modular Rust code
 
 ### Phase 7: Polish & Cross-Cutting Concerns
 

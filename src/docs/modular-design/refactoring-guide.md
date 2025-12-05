@@ -177,3 +177,35 @@ struct StateReader<D: Database, C: Codec, L: Logger> {
 
 **Current Version**: 1.0.0
 **Last Updated**: 2025-12-05
+### 5. Visibility Leaks
+
+**Symptoms**:
+- Public internal types exposed in public APIs
+- Implementation details accessible outside module
+- Unintentional dependencies on private structures
+
+**Refactoring Strategy**:
+
+```rust
+// ❌ Visibility Leak
+pub struct StateReader {
+    pub db: MdbxDatabase,        // Implementation leaked
+    pub cache: HashMap<Vec<u8>, Vec<u8>>,
+}
+
+// ✅ Encapsulated
+pub struct StateReader {
+    db: Arc<dyn Database>,       // Private, abstract
+    cache: HashMap<Vec<u8>, Vec<u8>>,
+}
+```
+
+**Visibility Decision Tree**:
+```
+Need to expose?
+├─ No → Private
+└─ Yes → To whom?
+   ├─ Parent only → pub(super)
+   ├─ Crate only → pub(crate)
+   └─ External → pub
+```

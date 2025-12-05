@@ -6,10 +6,50 @@ This document provides comprehensive guidelines for modular design in the erc-md
 
 ## Table of Contents
 
+### Core Architecture
 1. [Layer Definitions](modular-design/layer-definitions.md)
-2. [Design Patterns](modular-design/design-patterns.md)
-3. [Refactoring Guide](modular-design/refactoring-guide.md)
-4. [Architectural Rules](modular-design/architectural-rules.md)
+2. [Layer Diagrams](modular-design/layer-diagrams.md)
+3. [Layer Guidelines](modular-design/layer-guidelines.md)
+4. [Layer Placement Examples](modular-design/layer-placement-examples.md)
+5. [Dependency Direction Rules](modular-design/dependency-direction-rules.md)
+
+### Design Patterns
+6. [Design Patterns Overview](modular-design/design-patterns.md)
+7. [Builder Pattern Guide](modular-design/builder-pattern-guide.md)
+8. [NewType Pattern Guide](modular-design/newtype-pattern-guide.md)
+9. [Trait-First Pattern Guide](modular-design/trait-first-pattern-guide.md)
+10. [Trait Abstraction Patterns](modular-design/trait-abstraction-patterns.md)
+11. [Design Pattern Selection](modular-design/design-pattern-selection.md)
+
+### Module Development
+12. [Module Templates](modular-design/module-templates.md) ⭐ NEW
+13. [Dependency Injection Guide](modular-design/dependency-injection-guide.md) ⭐ NEW
+14. [Struct Placement Guide](modular-design/struct-placement-guide.md)
+15. [Terminology Guide](modular-design/terminology-guide.md)
+
+### Testing & Quality
+16. [TDD Workflow Guide](modular-design/tdd-workflow-guide.md) ⭐ NEW
+17. [Integration Test Examples](modular-design/integration-test-examples.md) ⭐ NEW
+18. [Refactoring Guide](modular-design/refactoring-guide.md)
+19. [Refactoring Exercise](modular-design/refactoring-exercise.md)
+20. [Import Refactoring Guide](modular-design/import-refactoring-guide.md)
+
+### Performance & Optimization
+21. [Zero-Cost Abstractions Guide](modular-design/zero-cost-abstractions-guide.md) ⭐ NEW
+22. [Performance Considerations](modular-design/performance-considerations.md) ⭐ NEW
+
+### Code Review & Compliance
+23. [Architectural Rules](modular-design/architectural-rules.md)
+24. [Architectural Compliance Checklist](modular-design/architectural-compliance-checklist.md)
+25. [Error Boundary Guide](modular-design/error-boundary-guide.md)
+26. [Error Type API Review Guide](modular-design/error-type-api-review-guide.md)
+27. [Mock PR Examples](modular-design/mock-pr-examples.md)
+
+### Documentation & Learning
+28. [Constitution Alignment](modular-design/constitution-alignment.md) ⭐ NEW
+29. [Existing Patterns](modular-design/existing-patterns.md)
+30. [Comprehension Quiz](modular-design/comprehension-quiz.md)
+31. [Documentation Quiz](modular-design/documentation-quiz.md)
 
 ## Core Design Principles
 

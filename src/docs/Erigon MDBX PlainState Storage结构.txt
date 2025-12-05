@@ -1,0 +1,260 @@
+﻿The Architecture of Efficiency: A Comprehensive Technical Analysis of NodeReal BSC-Erigon PlainState Storage and MDBX Structure
+Executive Summary
+The BNB Smart Chain (BSC) represents a unique challenge in the blockchain landscape: a high-throughput, EVM-compatible network with a state growth rate that dwarfs that of Ethereum Mainnet. To sustain this velocity, the underlying client infrastructure required a fundamental redesign. This report provides an exhaustive, expert-level analysis of node-real/bsc-erigon (specifically version 1.4.2-dev-a61fddab), focusing on its revolutionary storage architecture.
+At the core of this analysis is the PlainState bucket—a data structure that abandons the traditional Merkle Patricia Trie (MPT) for transaction execution in favor of a flat, direct-access model. We dissect the utilization of the MDBX (Memory-Mapped Database Extended) engine, detailing how its MDBX_DUPSORT feature is exploited to cluster contract storage efficiently. We provide a byte-level breakdown of the storage layout, including the critical role of the Incarnation mechanism (encoded as an 8-byte Big-Endian suffix) in managing contract lifecycles and the precise encoding strategies used to compress state data.
+The analysis demonstrates that this architecture reduces read amplification by an order of magnitude, enabling BSC archive nodes to operate with approximately 6TB of storage (compared to >50TB for Geth) and facilitating sync speeds exceeding 10 blocks per second. This report serves as a definitive technical reference for systems architects, node operators, and protocol developers seeking to understand the mechanics of high-performance EVM storage.
+________________
+1. The Scalability Imperative: Why BSC Demanded a New Storage Paradigm
+To understand the technical specifications of PlainState, one must first contextualize the problem it solves. The BNB Smart Chain operates with a 3-second block time and a gas limit significantly higher than Ethereum's. This results in a massive generation of "State"—the collective set of all account balances, nonces, bytecodes, and contract storage slots.
+1.1 The Failure of the Merkle Patricia Trie for High-Velocity Execution
+In the legacy Go Ethereum (Geth) client, the Global State is stored in a Merkle Patricia Trie (MPT). While the MPT is cryptographically elegant—allowing for the verification of the entire state via a single 32-byte Root Hash—it is computationally expensive for random access.
+Every time the Ethereum Virtual Machine (EVM) executes an SLOAD opcode (reading a value from contract storage), the client must traverse the trie from the Root down to the Leaf.
+* Structure: Root Node $\rightarrow$ Branch Node $\rightarrow$ Extension Node $\rightarrow$... $\rightarrow$ Leaf Node.
+* I/O Cost: In a large state like BSC, the trie can be 7 to 10 layers deep.
+* Amplification: A single logical read by the EVM triggers 7-10 physical database reads (random I/O).
+For BSC, where a single block can contain hundreds of transactions and tens of thousands of state accesses, this Read Amplification Phenomenon saturates the IOPS (Input/Output Operations Per Second) capacity of even enterprise-grade NVMe SSDs. This bottleneck manifests as "node lag," where the hardware cannot execute blocks as fast as the network produces them.1
+1.2 The Erigon Philosophy: Decoupling Execution from Verification
+The bsc-erigon client (derived from Erigon, formerly Turbo-Geth) introduces a radical architectural shift: Flat Storage.
+Erigon posits that while the MPT is necessary for consensus (verifying the state root), it is not necessary for execution. If the node trusts its local database, the EVM can read data directly from a flat key-value store, bypassing the trie entirely.
+This "Flat State" is stored in the PlainState bucket. By accessing data directly ($O(1)$ complexity relative to DB depth), Erigon reduces the I/O load for execution by over 90%.
+________________
+2. The Database Substrate: MDBX Architecture
+The choice of database engine is intrinsic to the performance of the PlainState layout. node-real/bsc-erigon utilizes MDBX (Memory-Mapped Database Extended), a high-performance fork of LMDB (Lightning Memory-Mapped Database).
+2.1 MDBX vs. LSM Trees (LevelDB/RocksDB)
+Most blockchain clients use Log-Structured Merge (LSM) trees (e.g., LevelDB in Geth). LSM trees are optimized for write throughput but suffer from:
+1. Read Amplification: Reads may need to check multiple SSTables (Sorted String Tables) and the MemTable.
+2. Compaction Stalls: The background process of merging SSTables consumes CPU and I/O, causing latency spikes.
+3. Caching Inefficiency: They often rely on application-level block caches, leading to double-caching (once in the OS page cache, once in the app).
+MDBX, by contrast, uses a B+Tree structure:
+* Deterministic Reads: Data is stored in fixed-size pages (typically 4KB, 8KB, or 16KB). A read involves traversing a balanced tree, offering stable latency.
+* Memory Mapping (mmap): MDBX maps the entire database file into the process's virtual address space.
+   * Implication: Erigon does not manage a complex cache. It relies on the Linux Kernel's Page Cache. If a page is in RAM, accessing it is a simple memory pointer dereference (nanosecond scale). If not, the OS triggers a Page Fault and loads it from disk. This "Zero-Copy" architecture is critical for throughput.3
+* ACID Transactions: MDBX guarantees strict Atomicity, Consistency, Isolation, and Durability, ensuring state integrity even during crashes.4
+2.2 The MDBX_DUPSORT Feature
+A pivotal feature of MDBX utilized by PlainState is Duplicate Sorting (MDBX_DUPSORT).
+In a standard Key-Value store, keys must be unique. If Key A maps to Value 1, writing Key A -> Value 2 overwrites the entry.
+With DUPSORT, a single key can hold multiple values. These values are stored in a sorted substructure (a sub-page or sub-tree) under the primary key.
+* Logical View: Key -> {Value_A, Value_B, Value_C}
+* Physical Optimization: The Primary Key is stored only once. This provides significant compression for datasets where many items share a common prefix.
+As we will analyze in Section 4, Erigon leverages DUPSORT to group all storage slots of a specific contract together, using the Contract Address as the primary sorting key.
+________________
+3. The PlainState Bucket: Definitive Layout Analysis
+The PlainState bucket is the "Source of Truth" for the current state of the ledger in bsc-erigon. It does not store history (past blocks); it stores the state at the tip of the chain.
+Bucket Identification:
+* Name: "PlainState" (defined in lib/kv/tables.go).5
+* Configuration: MDBX_DUPSORT | MDBX_CREATE.
+The bucket contains two distinct classes of data, differentiated by key length and structure: Accounts and Contract Storage.
+3.1 Account Layout
+This layout stores the metadata for Externally Owned Accounts (EOAs) and Smart Contracts (Nonce, Balance, etc.).
+3.1.1 Key Encoding
+* Structure: [Address]
+* Format: The raw 20-byte Ethereum Address.
+* Length: Strictly 20 bytes.
+* Hashing: None. The key is the address itself (hence "Plain" state).
+3.1.2 Value Encoding
+* Structure: RLP()
+* Optimization: Erigon employs a specialized "Storage Encoding" for accounts to save space.6
+   * Field Omission:
+      * StorageRoot: Often omitted in PlainState because the root is a property of the Trie, not the flat state. The flat state implicitly represents the data.
+      * CodeHash: Omitted if the account is an EOA (i.e., CodeHash is the hash of the empty string).
+   * Length: Variable, typically small (<100 bytes).
+3.2 Storage Layout
+This layout stores the persistent data of smart contracts. This is where the complexity of the Incarnation mechanism and MDBX Structure becomes paramount.
+3.2.1 The Challenge of Contract Reincarnation
+A unique edge case in the EVM is SELFDESTRUCT (opcode 0xFF). A contract can delete itself, clearing its code and storage. Subsequently, a new contract can be deployed to the same address (using CREATE2 or nonce-based collisions).
+If the database simply keyed storage by Address + Slot, the new contract might inherit "zombie" storage from the old contract if the deletion wasn't perfectly processed (or during deep reorgs).
+To solve this, Erigon assigns a unique Incarnation counter to every contract deployment.
+* Incarnation 0/1: Initial deployment.
+* Incarnation N+1: Re-deployment after self-destruct.
+The storage for a contract is logically keyed by (Address, Incarnation, Slot).
+3.2.2 Physical Key Layout (MDBX Primary Key)
+To utilize MDBX_DUPSORT, Erigon constructs a composite key that acts as a prefix for all storage slots of a specific contract incarnation.
+* Components: Address (20 bytes) + Incarnation (8 bytes).
+* Encoding Details:
+   * Address: Raw 20 bytes.
+   * Incarnation: 8 bytes, Big-Endian integer.
+* Total Key Length: 28 bytes.
+Why Big-Endian?
+MDBX sorts keys lexicographically (byte-by-byte). Big-Endian encoding ensures that Incarnations are sorted numerically (0x00...01 comes before 0x00...02). While Address is the primary sorting factor, the Incarnation suffix ensures that different lifecycles of the same address are stored adjacently but distinctly.5
+3.2.3 Physical Value Layout (MDBX DupSort Sub-Item)
+Under the 28-byte Primary Key, MDBX stores a list of duplicate items. Each item represents a single storage slot.
+* Item Structure: +
+   * StorageLocation (Sub-Key): The 32-byte index of the storage slot. (e.g., 0x00...00 for slot 0).
+   * StorageValue: The data stored in the slot.
+* Concatenation: The sub-key and value are concatenated into a single byte array stored in the DupSort page.
+Table 1: PlainState Physical Storage Schema
+Data Type
+	Primary MDBX Key (Prefix)
+	Key Length
+	DupSort Enabled?
+	DupSort Item Structure
+	Account
+	[20-byte Address]
+	20 Bytes
+	No (Technically allowed but unused)
+	``
+	Storage
+	[20-byte Address] ++
+	28 Bytes
+	Yes
+	++ [Compressed Value]
+	________________
+4. Deep Dive: Compression and Encoding Strategies
+bsc-erigon implements aggressive compression to minimize the footprint of the BSC state, which is notoriously bloated.
+4.1 Leading Zero Compression for Storage Values
+The EVM defines storage slots as 32-byte (256-bit) words. However, real-world usage often stores small numbers (booleans, counters, flags) that occupy only a few bytes. Storing 32 bytes for every slot would be wasteful.
+* Mechanism: Erigon strips leading zeros from the storage value before persisting it to the DupSort item.
+* Examples:
+   * Value 0x00...01 (Decimal 1) $\rightarrow$ Stored as 0x01 (1 byte).
+   * Value 0x00...FF (Decimal 255) $\rightarrow$ Stored as 0xFF (1 byte).
+   * Value 0x00...0100 (Decimal 256) $\rightarrow$ Stored as 0x0100 (2 bytes).
+* Decoding: Upon reading, the length of the DupSort item is checked.
+   * Item Length = $L$.
+   * Slot Key Length = 32 bytes.
+   * Value Length = $L - 32$.
+   * The system creates a 32-byte buffer, fills the end with the stored bytes, and pads the front with zeros.
+4.2 Handling Zero Values (SSTORE Deletion)
+In Ethereum, setting a storage slot to 0 clears it (and refunds gas). In PlainState, this equates to deletion.
+* If a slot's value is 0, the specific DupSort item is removed from the database entirely.
+* There are no entries with a value of 0x00 or empty byte arrays representing zero. Absence implies zero.
+4.3 Implication of the 28-Byte Prefix
+By grouping storage under the 28-byte Address+Incarnation prefix, Erigon achieves Prefix Compression inherently via the B+Tree.
+* If a contract has 10,000 storage slots, the 28-byte identifier is stored once (in the branch page pointing to the leaf/overflow pages), rather than 10,000 times (as would happen if the key was Addr+Inc+Slot).
+* This structure saves approximately $28 \times 10,000 = 280,000$ bytes per large contract, multiplied by thousands of contracts on BSC, resulting in gigabytes of savings.
+________________
+5. Execution Pipeline: Interaction with PlainState
+The true efficiency of this layout is realized during Stage 5 (Execution) of the Erigon sync pipeline.
+5.1 The Read Path (SLOAD)
+When the EVM processes a transaction:
+1. Opcode: SLOAD(0x05). Context: Contract 0xABCD..., Incarnation 1.
+2. Key Construction: The client constructs the 28-byte key 0xABCD... ++ 0x0000000000000001.
+3. DB Seek: The MDBX cursor seeks this key in PlainState.
+   * Result: Finds the page containing the DupSort items for this contract.
+4. DupSort Search: The cursor performs a binary search (or similar efficient intra-page search) for the sub-key 0x00...05 within the duplicate items.
+5. Return:
+   * If found: Decodes (pads) the value and returns it to the EVM stack.
+   * If not found: Returns 0.
+Performance Insight: This entire process requires typically one disk seek (to find the B+Tree leaf). Once the leaf is loaded into the OS Page Cache, subsequent reads to the same contract (common in complex DeFi transactions) are effectively instant memory reads.
+5.2 The Write Path (SSTORE) and ChangeSets
+Erigon does not write to the database immediately upon SSTORE.
+1. Intra-Block Cache: Writes are cached in memory during block execution.
+2. Block Commit: At the end of the block (or batch), changes are flushed to PlainState.
+3. History Generation (The ChangeSet):
+   * Before overwriting a value in PlainState, Erigon reads the current (soon to be old) value.
+   * This old value is written to the StorageChangeSet bucket.
+   * ChangeSet Key: BlockNumber (64-bit) + Address + Incarnation.
+   * ChangeSet Value: SlotKey + OldValue.
+4. PlainState Update: The new value overwrites the entry in PlainState.
+This mechanism ensures that PlainState always represents the Current Head state, while ChangeSets provide a reverse-diff log to reconstruct any past state.
+________________
+6. The Incarnation Map
+While PlainState stores the data using the Incarnation, the mapping of Address -> Current Incarnation is stored in a separate bucket: IncarnationMap.
+* Bucket: "IncarnationMap".5
+* Key: [Address] (20 bytes).
+* Value: [Incarnation] (8 bytes fixed).
+Lifecycle Logic:
+1. When a contract is created, the system checks IncarnationMap.
+2. If it exists, it reads the value, increments it by 1, and updates the map.
+3. This new Incarnation ID is then used for all writes to PlainState and PlainCodeHash.
+________________
+7. Operational Implications for BSC
+The node-real/bsc-erigon architecture has profound implications for node operators and the BSC ecosystem.
+7.1 Storage Efficiency (6TB vs 50TB)
+The combination of Flat Storage, MDBX compression, and the removal of the MPT overhead allows a BSC Archive Node to fit within approximately 6TB (as of mid-2024 benchmarks).1
+* PlainState: ~20-30% of storage.
+* ChangeSets (History): ~60-70% of storage.
+* Indices/Headers: ~10%.
+Contrast this with Geth, where the MPT nodes account for the vast majority of the 50TB footprint, most of which is redundant intermediate hash data.
+7.2 Sync Speed and "Staged Sync"
+Because PlainState execution does not require updating the MPT Root Hash after every transaction, Erigon can execute blocks at maximum CPU/NVMe speed.
+   * Batching: The "HashState" stage (calculating roots) runs only after a large batch of blocks is executed.
+   * Throughput: This enables sync speeds of 200+ Mgas/s or 10-20 blocks/s, allowing a fresh node to catch up to the BSC tip in days rather than months.8
+7.3 Pruning Capability
+For users who do not need an archive node, bsc-erigon supports granular pruning via the --prune flag.9
+   * --prune=h: Prune History (ChangeSets).
+   * --prune=r: Prune Receipts.
+   * Result: A "Full Node" that keeps PlainState (all current balances/storage) but discards the ChangeSet history. This node requires significantly less space (often <2TB) while still fully validating new blocks.
+________________
+8. Code-Level Implementation Reference
+Based on the lib/kv/tables.go and core/state/plain_state.go structures 5, the following pseudo-Go code illustrates the read logic:
+
+
+Go
+
+
+
+
+// Definition of the PlainState Bucket
+const PlainState = "PlainState" // MDBX_DUPSORT enabled
+
+// Function to read storage
+func GetStorage(tx db.Tx, addr Address, inc uint64, key Hash)byte {
+   // 1. Construct the 28-byte Primary Key
+   //    Address (20B) + Incarnation (8B BigEndian)
+   prefix := make(byte, 28)
+   copy(prefix[0:], addr[:])
+   binary.BigEndian.PutUint64(prefix[20:], inc)
+
+   // 2. Open Cursor on PlainState bucket
+   c := tx.CursorDupSort(PlainState)
+
+   // 3. Retrieve the specific item using GetBothRange
+   //    We seek the Prefix, and within duplicates, we seek the 'key' (slot)
+   //    MDBX efficiently finds the item where the sub-key matches 'key'
+   val, err := c.GetBothRange(prefix, key[:])
+   
+   if err!= nil |
+
+| val == nil {
+       return nil // Slot is empty (zero)
+   }
+
+   // 4. Extract Value
+   //    The returned 'val' is
+   //    We check if the first 32 bytes match the requested key
+   if!bytes.Equal(val[:32], key[:]) {
+        return nil // Exact match not found (Range seek landed on next key)
+   }
+
+   // 5. Return the compressed value (caller handles padding)
+   return val[32:] 
+}
+
+________________
+9. Conclusion
+The node-real/bsc-erigon client achieves its performance breakthrough not through a single optimization, but through a holistic re-engineering of the storage layer. The PlainState bucket is the linchpin of this architecture.
+By utilizing MDBX's DupSort capability, Erigon effectively maps the hierarchical nature of EVM storage (Contract $\rightarrow$ Incarnation $\rightarrow$ Slot) onto a flat Key-Value store without sacrificing locality of reference. The rigorous byte-level encoding—specifically the Address + BigEndian Incarnation prefix—ensures that storage slots are clustered on disk, minimizing seek latency and maximizing the efficacy of the OS Page Cache.
+For the BNB Smart Chain, this is not merely an optimization; it is an enabling technology. It allows the network to sustain its high throughput and massive state growth while keeping the hardware requirements for node operators within the realm of feasibility. As BSC continues to evolve, the PlainState architecture provides a robust, scalable foundation for the next generation of decentralized applications.
+________________
+Terminology Reference Table
+Term
+	Definition
+	Context in Erigon
+	PlainState
+	The database bucket storing unhashed, latest state data.
+	The primary execution data source.
+	MDBX
+	Memory-Mapped Database Extended.
+	The underlying KV storage engine.
+	DupSort
+	A DB feature allowing multiple values per key, sorted.
+	Used to cluster storage slots under a contract address.
+	Incarnation
+	A uint64 counter for contract deployments.
+	Prevents storage collisions after SELFDESTRUCT.
+	ChangeSet
+	A record of state before a block change.
+	Used for history, reorgs, and archive queries.
+	Big-Endian
+	Byte order where the most significant byte is first.
+	Used for Incarnation encoding to ensure correct sorting.
+	引用的著作
+   1. BNB Smart Chain (BSC): NodeReal Supports Erigon for High-Speed Blockchains., 访问时间为 十二月 5, 2025， https://nodereal.io/blog/en/bnb-smartchain/
+   2. Archive Node - BSC Develop - BNB Chain, 访问时间为 十二月 5, 2025， https://docs.bnbchain.org/bnb-smart-chain/developers/node_operators/archive_node/
+   3. node-real/bsc-erigon: Ethereum implementation on the efficiency frontier - GitHub, 访问时间为 十二月 5, 2025， https://github.com/node-real/bsc-erigon
+   4. Proceedings of the 23rd USENIX Conference on File and Storage Technologies (FAST '25), 访问时间为 十二月 5, 2025， https://www.usenix.org/system/files/fast25_full_proceedings_interior.pdf
+   5. erigon-lib/kv/tables.go at main - GitHub, 访问时间为 十二月 5, 2025， https://github.com/ledgerwatch/erigon-lib/blob/main/kv/tables.go
+   6. kv package - github.com/ledgerwatch/erigon-lib/kv - Go Packages, 访问时间为 十二月 5, 2025， https://pkg.go.dev/github.com/ledgerwatch/erigon-lib/kv
+   7. Dummy guide on how to start off with the Erigon codebase [Part 1]. | by Giulio Rebuffo, 访问时间为 十二月 5, 2025， https://medium.com/@giulio.rebuffo/dummy-guide-on-how-to-start-off-with-the-erigon-codebase-part-1-7c1b792f8b9f
+   8. Stage Sync Problem · erigontech erigon · Discussion #3216 - GitHub, 访问时间为 十二月 5, 2025， https://github.com/ledgerwatch/erigon/discussions/3216
+   9. Help: What is wrong with this syntax? · Issue #3947 · erigontech/erigon - GitHub, 访问时间为 十二月 5, 2025， https://github.com/ledgerwatch/erigon/issues/3947

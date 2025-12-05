@@ -87,17 +87,17 @@ A code reviewer needs to quickly validate that a pull request follows modular de
 ### Functional Requirements
 
 - **FR-001**: Documentation MUST provide clear decision trees for determining which layer (db, model, codec, reader, util) new functionality belongs to
-- **FR-002**: Documentation MUST include at least 5 real code examples from the erc-mdbx-index project demonstrating correct modular patterns
+- **FR-002**: Documentation MUST include at least 5 code examples demonstrating correct modular patterns, where "code examples" means: (a) extracted from actual erc-mdbx-index project modules OR simplified demonstrations maintaining realistic complexity, (b) minimum 20 lines of code per example, (c) covering at least 3 different architectural layers, (d) each example annotated with explanation of compliance
 - **FR-003**: Documentation MUST define prohibited patterns with concrete "anti-examples" showing what NOT to do
 - **FR-004**: Documentation MUST provide a 10-item checklist for validating module compliance before code review
 - **FR-005**: Documentation MUST explain error type conversion at module boundaries with complete examples
-- **FR-006**: Documentation MUST include refactoring patterns for fixing the 5 most common architectural violations
-- **FR-007**: Documentation MUST provide templates for defining new modules (mod.rs structure, visibility patterns)
-- **FR-008**: Documentation MUST explain dependency injection strategies specific to Rust ownership model
+- **FR-006**: Documentation MUST include refactoring patterns for fixing the 5 most common architectural violations (circular dependencies, glob imports, error boundary violations, direct cross-layer access, visibility leaks)
+- **FR-007**: Documentation MUST provide templates for defining new modules including: (a) standard mod.rs structure with re-exports, (b) visibility patterns (pub/pub(crate)/pub(super)), (c) documentation headers, (d) minimum 2 complete module examples from different layers
+- **FR-008**: Documentation MUST explain dependency injection strategies specific to Rust ownership model including: (a) trait-based injection with Arc/Rc for shared ownership, (b) lifetime-parameterized injection for zero-cost abstractions, (c) constructor injection patterns, (d) minimum 3 working code examples
 - **FR-009**: Documentation MUST include visual diagrams showing correct and incorrect dependency flows
-- **FR-010**: Documentation MUST provide integration test examples demonstrating testability of modular code
-- **FR-011**: Documentation MUST explain how to balance Rust zero-cost abstractions with architectural layering
-- **FR-012**: Documentation MUST include performance considerations for trait dispatch and dynamic vs static polymorphism in modular design
+- **FR-010**: Documentation MUST provide integration test examples demonstrating testability of modular code including: (a) cross-layer integration test setup, (b) mock implementations using traits, (c) fixture-based testing patterns, (d) minimum 2 complete test examples covering different architectural layers
+- **FR-011**: Documentation MUST explain how to balance Rust zero-cost abstractions with architectural layering including: (a) when to use static dispatch (generics) vs dynamic dispatch (trait objects), (b) monomorphization impact on compile times and binary size, (c) decision criteria with minimum 3 concrete scenarios, (d) performance trade-off examples with qualitative impact assessment (negligible/minor/significant)
+- **FR-012**: Documentation MUST include performance considerations for trait dispatch and dynamic vs static polymorphism including: (a) benchmark methodology for measuring dispatch overhead, (b) typical performance ranges (static: ~0ns overhead, dynamic: ~2-10ns per call), (c) when dynamic dispatch is acceptable (I/O-bound operations, configuration), (d) minimum 2 code examples comparing both approaches
 
 ### Key Entities
 
@@ -111,12 +111,12 @@ A code reviewer needs to quickly validate that a pull request follows modular de
 
 ### Measurable Outcomes
 
-- **SC-001**: New developers can correctly classify feature requirements into architectural layers with 85% accuracy after reading documentation
-- **SC-002**: Code reviewers identify architectural violations 40% faster using the documentation checklist compared to manual inspection
-- **SC-003**: Pull requests requiring architectural rework due to layer violations decrease by 60% within 2 months of documentation deployment
+- **SC-001**: New developers can correctly classify feature requirements into architectural layers with 85% accuracy after reading documentation (measured via quiz with 20 classification questions)
+- **SC-002**: Code reviewers identify architectural violations 40% faster using the documentation checklist compared to manual inspection (baseline: measure current average review time for architectural issues across 10 recent PRs, then compare with 10 PRs after documentation deployment)
+- **SC-003**: Pull requests requiring architectural rework due to layer violations decrease by 60% within 2 months of documentation deployment (baseline: track % of PRs requiring architecture rework in 2 months before documentation, compare with 2 months after)
 - **SC-004**: Developers can complete refactoring exercises (fixing 3 common violations) in under 45 minutes with 90% correctness
 - **SC-005**: 80% of developers rate the documentation as "helpful" or "very helpful" for daily architectural decisions in team surveys
-- **SC-006**: Average time to onboard new developer to architectural standards reduces from 2 weeks to 3 days
+- **SC-006**: Average time to onboard new developer to architectural standards reduces from 2 weeks to 3 days (baseline: survey 3 most recent developer onboarding experiences for current time-to-productivity, measure via "time until first PR passes architecture review without rework")
 - **SC-007**: Documentation receives less than 5 clarification questions per quarter, indicating comprehensiveness
 
 ## Scope *(mandatory)*
@@ -150,6 +150,30 @@ A code reviewer needs to quickly validate that a pull request follows modular de
 6. Examples will use real or realistic code from the erc-mdbx-index domain
 7. Documentation format is Markdown for easy integration with existing docs
 8. Team values explicit dependency management over convenience (no glob imports)
+
+## Constitution Alignment *(mandatory)*
+
+This feature directly implements and documents the erc-mdbx-index constitution principles:
+
+| Constitution Principle (Chinese) | Constitution Principle (English) | Mapping to Requirements |
+|----------------------------------|----------------------------------|-------------------------|
+| 内存安全优先 | Memory Safety First | FR-008 (ownership model in DI), FR-011 (zero-cost abstractions), Architectural Principles section |
+| 测试驱动开发 | Test-Driven Development | FR-010 (integration test examples), refactoring exercises with test-first workflow |
+| 分层架构 | Layered Architecture | FR-001 (layer decision trees), FR-009 (dependency flow diagrams), all layer definition content |
+| 性能至上 | Performance First | FR-011 (zero-cost abstractions), FR-012 (trait dispatch performance), performance trade-off guidance |
+| 快速失败 | Fail Fast | FR-005 (error boundary conversion), error handling patterns across layers |
+
+**Layer Terminology Mapping:**
+- Constitution DAL (Database Abstraction Layer) = Spec `db` layer
+- Constitution Model Layer = Spec `model` layer  
+- Constitution Service Layer = Spec `reader` + `codec` layers (combined business logic)
+- Additional spec layers: `util` (cross-cutting concerns)
+
+**Non-Negotiables Coverage:**
+- "绝不在unsafe代码中引入未定义行为" → Documented in memory safety patterns and FFI boundary guidelines
+- "绝不长时间持有读事务" → Covered in database layer patterns and transaction lifecycle examples
+- "绝不假设RLP字段完整性" → Addressed in codec layer error handling and defensive parsing patterns
+- "绝不忽略版本兼容性" → Included in architectural evolution and backward compatibility guidance
 
 ## Dependencies *(optional)*
 

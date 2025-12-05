@@ -15,8 +15,9 @@ graph TD
     Foundational --> US2[User Story 2: Refactoring]
     US1 --> US3[User Story 3: Design Patterns]
     US2 --> US4[User Story 4: Code Review]
-    US3 --> Polish
-    US4 --> Polish
+    US3 --> MissingFR[Phase 6.5: Missing FR Coverage]
+    US4 --> MissingFR
+    MissingFR --> Polish
 ```
 
 ## Implementation Strategy
@@ -37,6 +38,7 @@ Incremental Delivery: Expand documentation in phases, focusing on clarity and pr
 - [ ] T004 Extract existing modular design patterns from current codebase
 - [ ] T005 Define consistent terminology for architectural concepts
 - [ ] T006 Create initial layer definition guidelines
+- [ ] T034 [Constitution] Map Chinese constitution principles to English documentation sections with explicit cross-references
 
 ### Phase 3: User Story 1 - New Developer Onboarding [US1]
 
@@ -67,6 +69,16 @@ Incremental Delivery: Expand documentation in phases, focusing on clarity and pr
 - [ ] T022 [US4] Develop error type and API design review guidelines
 - [ ] T023 [P] [US4] Add mock pull request examples with annotations
 
+### Phase 6.5: Missing Functional Requirements Coverage
+
+- [ ] T028 [FR-007] Create module templates with mod.rs structure and visibility patterns (2 complete examples)
+- [ ] T029 [FR-008] Document dependency injection strategies for Rust ownership model (3 working code examples)
+- [ ] T030 [FR-010] Add integration test examples for modular code testability (2 complete test examples)
+- [ ] T031 [FR-011] Document zero-cost abstraction trade-offs with decision criteria (3 scenarios)
+- [ ] T032 [FR-012] Add performance considerations for trait dispatch with benchmarks (2 comparison examples)
+- [ ] T033 [FR-006] Complete refactoring patterns for 5th violation (visibility leaks)
+- [ ] T035 [Constitution] Include test-first workflow examples demonstrating red-green-refactor cycle for modular Rust code
+
 ### Phase 7: Polish & Cross-Cutting Concerns
 
 - [ ] T024 Conduct internal documentation review
@@ -76,9 +88,11 @@ Incremental Delivery: Expand documentation in phases, focusing on clarity and pr
 
 ## Parallel Execution Opportunities
 
-1. Layer documentation (T007, T010)
-2. Design pattern guides (T016, T017, T018)
-3. Refactoring examples (T012, T013, T014)
+1. Foundational and constitution mapping (T004, T005, T006, T034)
+2. Layer documentation (T007, T010)
+3. Design pattern guides (T016, T017, T018)
+4. Refactoring examples (T012, T013, T014, T033)
+5. Missing FR coverage (T028, T029, T030, T031, T032, T035)
 
 ## Success Criteria Validation
 

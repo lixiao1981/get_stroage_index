@@ -1,6 +1,6 @@
 //! Raw MDBX database scanner - attempts to open ALL possible database handles
 
-use heed::{EnvOpenOptions, RoTxn, Database};
+use heed::{EnvOpenOptions, Database};
 use heed::types::*;
 use std::env;
 
@@ -33,13 +33,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let unnamed_db: Database<Bytes, Bytes> = env.open_database(&txn, None)?
         .ok_or("Failed to open unnamed database")?;
     
-    let stats = txn.database_stat(&unnamed_db)?;
+    // Count entries manually
+    let mut entry_count = 0;
+    for _ in unnamed_db.iter(&txn)? {
+        entry_count += 1;
+    }
+    
     println!("✓ Unnamed DB Stats:");
-    println!("  - Entries: {}", stats.entries());
-    println!("  - Depth: {}", stats.depth());
-    println!("  - Branch pages: {}", stats.branch_pages());
-    println!("  - Leaf pages: {}", stats.leaf_pages());
-    println!("  - Overflow pages: {}", stats.overflow_pages());
+    println!("  - Entries: {}", entry_count);
     
     println!("\n📋 All entries in unnamed DB:");
     let mut count = 0;
@@ -58,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  {}: key='{}' value={}", count, key_str, value_preview);
         
         if count > 50 {
-            println!("  ... (truncated, {} total entries)", stats.entries());
+            println!("  ... (truncated, {} total entries)", entry_count);
             break;
         }
     }
@@ -111,26 +112,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for name in table_names {
         match env.open_database::<Bytes, Bytes>(&txn, Some(name)) {
             Ok(Some(db)) => {
-                match txn.database_stat(&db) {
-                    Ok(stats) => {
-                        let entries = stats.entries();
-                        if entries > 0 {
-                            println!("✓ '{}': {} entries", name, entries);
-                            
-                            // Show first entry
-                            if let Ok(mut iter) = db.iter(&txn) {
-                                if let Some(Ok((key, value))) = iter.next() {
-                                    println!("    First key: {:02x?}... ({} bytes)", 
-                                        &key[..key.len().min(20)], key.len());
-                                    println!("    First value: {:02x?}... ({} bytes)",
-                                        &value[..value.len().min(20)], value.len());
-                                }
-                            }
-                        } else {
-                            println!("○ '{}': exists but empty", name);
+                // Count entries manually
+                let mut entries = 0;
+                for _ in db.iter(&txn)? {
+                    entries += 1;
+                }
+                
+                if entries > 0 {
+                    println!("✓ '{}': {} entries", name, entries);
+                    
+                    // Show first entry
+                    if let Ok(mut iter) = db.iter(&txn) {
+                        if let Some(Ok((key, value))) = iter.next() {
+                            println!("    First key: {:02x?}... ({} bytes)", 
+                                &key[..key.len().min(20)], key.len());
+                            println!("    First value: {:02x?}... ({} bytes)",
+                                &value[..value.len().min(20)], value.len());
                         }
                     }
-                    Err(e) => println!("⚠️  '{}': stat error: {}", name, e),
+                } else {
+                    println!("○ '{}': exists but empty", name);
                 }
             }
             Ok(None) => {
@@ -167,10 +168,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("DIAGNOSIS:");
     println!("{}", "=".repeat(70));
     
-    if unnamed_db.is_empty(&txn)? {
+    if entry_count == 0 {
         println!("❌ Unnamed database is empty - no table metadata");
     } else {
-        println!("✓ Unnamed database contains {} entries", stats.entries());
+        println!("✓ Unnamed database contains {} entries", entry_count);
     }
     
     println!("\n💡 Next Steps:");

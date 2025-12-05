@@ -103,6 +103,18 @@ pub struct PlainAccount {
 
 ## 示例
 
+### 诊断数据库（推荐首次运行）
+
+```bash
+# 检查数据库结构和表内容
+cargo run --example inspect_tables /path/to/chaindata
+```
+
+这个工具会显示：
+- 所有可用的 Erigon 表及其记录数
+- PlainState 表中的前 5 个账户地址
+- 帮助诊断路径、权限或配置问题
+
 ### 查询账户信息
 
 ```bash
@@ -137,6 +149,22 @@ cargo run --example db_info /path/to/chaindata
 export ERIGON_DB_PATH=/path/to/chaindata
 cargo bench
 ```
+
+## 故障排查
+
+如果遇到 "No accounts found" 或其他数据库问题：
+
+1. **首先运行诊断工具**：
+   ```bash
+   cargo run --example inspect_tables /path/to/chaindata
+   ```
+
+2. **查看详细排查指南**：[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
+
+常见问题：
+- ❌ 路径不正确（需要指向 `chaindata` 目录）
+- ❌ PlainState 表不存在（Erigon 配置问题）
+- ❌ 数据库正在同步中（等待同步完成）
 
 ## 开发状态
 
